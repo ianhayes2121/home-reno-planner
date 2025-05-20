@@ -253,7 +253,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      find_user_id_by_email: {
+        Args: { lookup_email: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

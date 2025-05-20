@@ -108,18 +108,18 @@ const ProjectInvite = () => {
     setIsInviting(true);
     try {
       // First, check if the user exists with this email
-      const { data: userData, error: userError } = await supabase
+      const { data, error: userError } = await supabase
         .rpc('find_user_id_by_email', { lookup_email: inviteEmail });
       
       if (userError) {
         throw new Error(userError.message || 'Failed to find user');
       }
       
-      if (!userData) {
+      if (!data) {
         throw new Error('User not found. Please ask them to sign up first.');
       }
       
-      const userId = userData;
+      const userId = data as string;
       
       // Check if user is already a member
       const isAlreadyMember = members.some(member => member.id === userId);
