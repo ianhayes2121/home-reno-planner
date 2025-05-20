@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, ReactNode, useEffect } from "react";
 import { Project, Room, Task, Material } from "@/types";
 import { v4 as uuidv4 } from "uuid";
@@ -42,13 +43,14 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
       try {
         setLoading(true);
         
-        // First, get projects the user has access to
+        // First, get the user's memberships directly (with the corrected RLS policy)
         const { data: projectUsers, error: projectUsersError } = await supabase
           .from('project_users')
           .select('project_id')
           .eq('user_id', user.id);
         
         if (projectUsersError) {
+          console.error('Error fetching project users:', projectUsersError);
           throw projectUsersError;
         }
         
@@ -64,6 +66,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             .single();
           
           if (projectError) {
+            console.error('Error fetching project:', projectError);
             throw projectError;
           }
           
@@ -74,6 +77,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             .eq('project_id', projectId);
           
           if (roomsError) {
+            console.error('Error fetching rooms:', roomsError);
             throw roomsError;
           }
           
@@ -84,6 +88,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             .eq('project_id', projectId);
           
           if (materialsError) {
+            console.error('Error fetching materials:', materialsError);
             throw materialsError;
           }
           
@@ -94,6 +99,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
             .eq('project_id', projectId);
           
           if (tasksError) {
+            console.error('Error fetching tasks:', tasksError);
             throw tasksError;
           }
           
@@ -137,6 +143,7 @@ export const ProjectProvider: React.FC<{ children: ReactNode }> = ({ children })
           setProject(formattedProject);
         } else {
           // No projects found for this user
+          console.log('No projects found for user');
           setProject(null);
         }
       } catch (error) {
