@@ -22,7 +22,7 @@ import {
 import { useProject } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
 import { Material, Task } from "@/types";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Trash2, 
   Plus, 
@@ -50,6 +50,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
+// Define status labels at the component level so it's accessible throughout
+const statusLabels = {
+  "not-started": "Not Started",
+  "in-progress": "In Progress",
+  "completed": "Completed",
+};
+
 const TaskItem: React.FC<{
   task: Task;
   allTasks: Task[];
@@ -63,12 +70,6 @@ const TaskItem: React.FC<{
     "not-started": "bg-gray-100 text-gray-800",
     "in-progress": "bg-blue-100 text-blue-800",
     "completed": "bg-green-100 text-green-800",
-  };
-  
-  const statusLabels = {
-    "not-started": "Not Started",
-    "in-progress": "In Progress",
-    "completed": "Completed",
   };
   
   const statusIcons = {
@@ -240,7 +241,7 @@ const Tasks: React.FC = () => {
         toast({
           title: "Warning",
           description: "This start date is before one or more dependencies finish.",
-          variant: "warning",
+          variant: "default",
         });
       }
     }
@@ -307,7 +308,7 @@ const Tasks: React.FC = () => {
         toast({
           title: "Missing Information",
           description: "Some dependent tasks don't have end dates set.",
-          variant: "warning",
+          variant: "default",
         });
       }
       
@@ -320,7 +321,7 @@ const Tasks: React.FC = () => {
         toast({
           title: "Date Conflict",
           description: "Start date is before one or more dependencies finish.",
-          variant: "warning",
+          variant: "default",
         });
       }
     }
