@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -7,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckSquare, Clock, DollarSign } from "lucide-react";
 import DashboardLayout from "@/components/layouts/DashboardLayout";
+import { formatCurrency } from "@/lib/utils";
 
 const Dashboard: React.FC = () => {
   const { project, getCompletionPercentage, getTotalMaterialCost } = useProject();
@@ -63,9 +63,9 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold mb-2">
-              ${materialCost.toFixed(2)}
+              ${formatCurrency(materialCost)}
               <span className="text-sm text-gray-500 font-normal ml-1">
-                of ${project.budget.toFixed(2)}
+                of ${formatCurrency(project.budget)}
               </span>
             </div>
             <Progress 

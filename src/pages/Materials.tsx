@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   Card,
@@ -41,6 +40,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { formatCurrency } from "@/lib/utils";
 
 const unitOptions = [
   { value: "piece", label: "Piece" },
@@ -188,7 +188,7 @@ const Materials: React.FC = () => {
           <CardHeader className="pb-2">
             <CardTitle>Materials List</CardTitle>
             <CardDescription>
-              Total Cost: ${totalCost.toFixed(2)}
+              Total Cost: ${formatCurrency(totalCost)}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -209,8 +209,8 @@ const Materials: React.FC = () => {
                     <TableCell className="font-medium">{material.name}</TableCell>
                     <TableCell>{material.quantity}</TableCell>
                     <TableCell>{material.unit}</TableCell>
-                    <TableCell>${material.unitCost.toFixed(2)}</TableCell>
-                    <TableCell>${material.totalCost.toFixed(2)}</TableCell>
+                    <TableCell>${formatCurrency(material.unitCost, true)}</TableCell>
+                    <TableCell>${formatCurrency(material.totalCost)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2">
                         <Button 
@@ -328,7 +328,7 @@ const Materials: React.FC = () => {
             
             <div className="flex justify-between p-3 bg-gray-50 rounded border">
               <span className="font-medium">Total Cost:</span>
-              <span>${((unitCost || 0) * (quantity || 0)).toFixed(2)}</span>
+              <span>${formatCurrency((unitCost || 0) * (quantity || 0))}</span>
             </div>
           </div>
           <DialogFooter>
