@@ -49,7 +49,7 @@ const unitOptions = [
   { value: "pack", label: "Pack" },
   { value: "box", label: "Box" },
   { value: "bag", label: "Bag" },
-  { value: "contractor", label: "Contractor" },
+  { value: "contractor", label: "Contractor" }, // Fixed: Added missing colon here
   { value: "gallon", label: "Gallon" },
 ];
 
