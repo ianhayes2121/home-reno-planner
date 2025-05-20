@@ -13,7 +13,7 @@ const corsHeaders = {
   'Content-Type': 'application/json'
 };
 
-// This function will fetch a user by email without exposing sensitive auth table data
+// This function will fetch or invite a user by email
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -50,9 +50,9 @@ serve(async (req) => {
       );
     }
 
-    // Parse the request to get the email
+    // Parse the request to get the email and invitation details
     const requestData = await req.json().catch(() => ({ email: null }));
-    const { email } = requestData;
+    const { email, inviteToProjectId } = requestData;
     
     if (!email) {
       return new Response(
@@ -64,7 +64,7 @@ serve(async (req) => {
     const normalizedEmail = email.trim().toLowerCase();
     console.log(`Looking up user with email: ${normalizedEmail}`);
 
-    // Use auth.getUser() to find a user by email
+    // Use admin.listUsers to find a user by email
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers({
       filter: {
         email: normalizedEmail,
@@ -79,37 +79,73 @@ serve(async (req) => {
       );
     }
 
-    if (!userData || userData.users.length === 0) {
-      console.log('No user found with email:', normalizedEmail);
-      return new Response(
-        JSON.stringify({ error: 'User not found' }),
-        { status: 404, headers: corsHeaders }
-      );
-    }
-
     // Find the first non-deleted user
-    const foundUser = userData.users.find(user => !user.banned_until && !user.deleted_at);
-    
-    if (!foundUser) {
-      console.log('No active user found with email:', normalizedEmail);
+    const foundUser = userData && userData.users.length > 0 ? 
+      userData.users.find(user => !user.banned_until && !user.deleted_at) : null;
+      
+    if (foundUser) {
+      console.log(`Found existing user with id: ${foundUser.id}`);
+      
+      // Return the user ID for an existing user
       return new Response(
-        JSON.stringify({ error: 'User not found or inactive' }),
-        { status: 404, headers: corsHeaders }
+        JSON.stringify({ id: foundUser.id, isNewUser: false }),
+        { status: 200, headers: corsHeaders }
       );
     }
     
-    console.log(`Found user with id: ${foundUser.id}`);
-
-    // Return the user ID (without exposing other sensitive auth info)
+    // User not found, create a new user with invitation
+    console.log(`No user found with email: ${normalizedEmail}. Creating invitation...`);
+    
+    // Generate a secure random password (user will reset it)
+    const tempPassword = crypto.randomUUID().replace(/-/g, '');
+    
+    // Create the user with the admin API
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password: tempPassword,
+      email_confirm: true, // Auto-confirm the email
+      user_metadata: {
+        invited_by: user.id,
+        invited_to_project: inviteToProjectId || null
+      }
+    });
+    
+    if (createError) {
+      console.error('Error creating user:', createError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to create user', details: createError.message }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+    
+    // Send the password reset email so the user can set their own password
+    const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: normalizedEmail,
+      options: {
+        redirectTo: `${Deno.env.get("SITE_URL") || 'https://home-reno-planner.lovable.app'}/settings`
+      }
+    });
+    
+    if (resetError) {
+      console.error('Error sending password reset:', resetError);
+      return new Response(
+        JSON.stringify({ error: 'Created user but failed to send password reset email', details: resetError.message }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+    
+    console.log(`Created new user with id: ${newUser.user.id} and sent password reset email`);
+    
+    // Return the newly created user's ID
     return new Response(
-      JSON.stringify({ id: foundUser.id }),
+      JSON.stringify({ id: newUser.user.id, isNewUser: true }),
       { status: 200, headers: corsHeaders }
     );
-
   } catch (error) {
     console.error('Error in getUserByEmail function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error', stack: error.stack }),
+      JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: corsHeaders }
     );
   }

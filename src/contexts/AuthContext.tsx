@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User, AuthError } from '@supabase/supabase-js';
@@ -10,6 +9,7 @@ interface Profile {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  email: string | null;
   created_at: string;
   updated_at: string;
 }

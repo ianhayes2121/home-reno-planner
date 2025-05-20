@@ -8,7 +8,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Trash2, UserPlus, AlertCircle } from 'lucide-react';
+import { Loader2, Trash2, UserPlus, AlertCircle, Mail } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -16,6 +16,7 @@ interface ProjectMember {
   id: string;
   email: string;
   role: string;
+  isPending?: boolean;
 }
 
 const ProjectInvite = () => {
@@ -38,7 +39,7 @@ const ProjectInvite = () => {
         // Get project_users entries
         const { data: projectUsers, error } = await supabase
           .from('project_users')
-          .select('user_id, role')
+          .select('user_id, role, is_pending')
           .eq('project_id', project.id);
           
         if (error) throw error;
@@ -71,6 +72,9 @@ const ProjectInvite = () => {
             
             if (displayName) {
               email = displayName;
+            } else if (profileData.email) {
+              // Use email as fallback if available
+              email = profileData.email;
             }
           }
           
@@ -82,7 +86,8 @@ const ProjectInvite = () => {
           return {
             id: pu.user_id,
             email,
-            role: pu.role
+            role: pu.role,
+            isPending: pu.is_pending
           };
         });
         
@@ -121,41 +126,42 @@ const ProjectInvite = () => {
     setIsInviting(true);
     setError(null);
     try {
-      // First, check if the user exists with this email
       const inviteEmailTrimmed = inviteEmail.trim();
       console.log(`Attempting to invite user with email: ${inviteEmailTrimmed}`);
       
-      // Make the request to the edge function
+      // Make the request to the edge function with project ID for context
       const response = await fetch(`https://riefbexhwazkcnlpxmyo.supabase.co/functions/v1/getUserByEmail`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ email: inviteEmailTrimmed })
+        body: JSON.stringify({ 
+          email: inviteEmailTrimmed,
+          inviteToProjectId: project.id
+        })
       });
       
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error from getUserByEmail function:', errorData);
         
-        if (response.status === 404) {
-          throw new Error(`No user found with email ${inviteEmailTrimmed}. Please ask them to sign up first.`);
-        } else if (response.status === 401) {
+        if (response.status === 401) {
           throw new Error('Authentication error. Please log out and back in.');
         } else {
-          throw new Error(errorData.error || 'Failed to find user');
+          throw new Error(errorData.error || 'Failed to process invitation');
         }
       }
       
       const data = await response.json();
       const userId = data.id;
+      const isNewUser = data.isNewUser;
       
       if (!userId) {
         throw new Error('User ID not returned from lookup');
       }
       
-      console.log(`Found user with ID: ${userId}`);
+      console.log(`User found/created with ID: ${userId}, isNewUser: ${isNewUser}`);
       
       // Check if user is already a member
       const isAlreadyMember = members.some(member => member.id === userId);
@@ -169,39 +175,25 @@ const ProjectInvite = () => {
         .insert({
           project_id: project.id,
           user_id: userId,
-          role: 'member'
+          role: 'member',
+          is_pending: isNewUser
         });
       
       if (inviteError) throw inviteError;
       
-      // Fetch the user's profile to get their name
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('first_name, last_name')
-        .eq('id', userId)
-        .single();
-        
-      let displayName = inviteEmailTrimmed;
-      if (profileData) {
-        const firstName = profileData.first_name || '';
-        const lastName = profileData.last_name || '';
-        const fullName = [firstName, lastName].filter(Boolean).join(' ');
-        
-        if (fullName) {
-          displayName = fullName;
-        }
-      }
-      
-      // Update members list
+      // Add a new member to the list
       setMembers([...members, { 
         id: userId, 
-        email: displayName, 
-        role: 'member' 
+        email: inviteEmailTrimmed,  // We'll display the email until they set up their profile
+        role: 'member',
+        isPending: isNewUser
       }]);
       
       toast({
-        title: 'User invited',
-        description: `${displayName} has been added to this project.`,
+        title: isNewUser ? 'Invitation sent' : 'User added',
+        description: isNewUser 
+          ? `An invitation email has been sent to ${inviteEmailTrimmed}`
+          : `${inviteEmailTrimmed} has been added to this project`,
       });
       
       setInviteEmail('');
@@ -319,10 +311,16 @@ const ProjectInvite = () => {
                 <li key={member.id} className="flex items-center justify-between bg-muted/40 p-2 rounded-md">
                   <div>
                     <p className="text-sm font-medium">{member.email}</p>
-                    <div className="flex items-center mt-1">
+                    <div className="flex items-center mt-1 space-x-2">
                       <Badge variant={member.role === 'owner' ? 'default' : 'secondary'} className="text-xs">
                         {member.role}
                       </Badge>
+                      {member.isPending && (
+                        <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">
+                          <Mail className="h-3 w-3 mr-1" />
+                          Pending
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   {member.id !== user?.id && (
