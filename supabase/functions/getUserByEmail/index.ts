@@ -59,29 +59,44 @@ serve(async (req) => {
       );
     }
 
-    // Query the auth.users table to find the user by email
-    const { data: userData, error: userError } = await supabaseAdmin
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log(`Looking up user with email: ${normalizedEmail}`);
+
+    // Query the auth.users table to find the user by email (case insensitive)
+    const { data: users, error: userError } = await supabaseAdmin
       .from('auth.users')
-      .select('id')
-      .eq('email', email)
-      .single();
+      .select('id, email')
+      .ilike('email', normalizedEmail);
 
     if (userError) {
+      console.error('Error querying users:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Database query failed' }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    if (!users || users.length === 0) {
+      console.log('No user found with email:', normalizedEmail);
       return new Response(
         JSON.stringify({ error: 'User not found' }),
         { status: 404, headers: corsHeaders }
       );
     }
 
+    const foundUser = users[0];
+    console.log(`Found user with id: ${foundUser.id}`);
+
     // Return the user ID (without exposing other sensitive auth info)
     return new Response(
-      JSON.stringify({ id: userData.id }),
+      JSON.stringify({ id: foundUser.id }),
       { status: 200, headers: corsHeaders }
     );
 
   } catch (error) {
+    console.error('Error in getUserByEmail function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: corsHeaders }
     );
   }

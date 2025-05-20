@@ -36,6 +36,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Function to fetch user profile data
   const fetchProfile = async (userId: string) => {
     try {
+      console.log(`Fetching profile for user: ${userId}`);
+      
+      // First try to get the profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -43,15 +46,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .single();
 
       if (error) {
+        // If profile not found, create it
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, creating one...');
+          
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              first_name: '',
+              last_name: '',
+              avatar_url: null,
+            })
+            .select()
+            .single();
+            
+          if (createError) {
+            console.error('Error creating profile:', createError);
+            return;
+          }
+          
+          console.log('Profile created successfully');
+          setProfile(newProfile as Profile);
+          return;
+        }
+        
         console.error('Error fetching profile:', error);
         return;
       }
 
       if (data) {
+        console.log('Profile loaded successfully');
         setProfile(data as Profile);
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error in fetchProfile:', error);
     }
   };
 
@@ -65,7 +94,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         // Fetch profile when user signs in
         if (sessionData?.user) {
-          fetchProfile(sessionData.user.id);
+          // Use setTimeout to avoid potential auth state deadlocks
+          setTimeout(() => {
+            fetchProfile(sessionData.user.id);
+          }, 0);
         } else {
           setProfile(null);
         }

@@ -53,8 +53,8 @@ const ProjectInvite = () => {
             .eq('id', pu.user_id)
             .single();
             
-          if (profileError && profileError.code !== 'PGSQL_ERROR') {
-            console.error('Error fetching profile:', profileError);
+          if (profileError) {
+            console.log(`Error fetching profile for user ${pu.user_id}:`, profileError);
           }
           
           // Get email from profiles or use fallback user ID
@@ -108,18 +108,38 @@ const ProjectInvite = () => {
     setIsInviting(true);
     try {
       // First, check if the user exists with this email
-      const { data, error: userError } = await supabase
-        .rpc('find_user_id_by_email', { lookup_email: inviteEmail });
+      const inviteEmailTrimmed = inviteEmail.trim();
+      console.log(`Attempting to invite user with email: ${inviteEmailTrimmed}`);
       
-      if (userError) {
-        throw new Error(userError.message || 'Failed to find user');
+      // Make the request to the edge function
+      const response = await fetch(`https://riefbexhwazkcnlpxmyo.supabase.co/functions/v1/getUserByEmail`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ email: inviteEmailTrimmed })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error from getUserByEmail function:', errorData);
+        
+        if (response.status === 404) {
+          throw new Error(`No user found with email ${inviteEmailTrimmed}. Please ask them to sign up first.`);
+        } else {
+          throw new Error(errorData.error || 'Failed to find user');
+        }
       }
       
-      if (!data) {
-        throw new Error('User not found. Please ask them to sign up first.');
+      const data = await response.json();
+      const userId = data.id;
+      
+      if (!userId) {
+        throw new Error('User ID not returned from lookup');
       }
       
-      const userId = data as string;
+      console.log(`Found user with ID: ${userId}`);
       
       // Check if user is already a member
       const isAlreadyMember = members.some(member => member.id === userId);
@@ -141,13 +161,13 @@ const ProjectInvite = () => {
       // Update members list
       setMembers([...members, { 
         id: userId, 
-        email: inviteEmail, 
+        email: inviteEmailTrimmed, 
         role: 'member' 
       }]);
       
       toast({
         title: 'User invited',
-        description: `${inviteEmail} has been added to this project.`,
+        description: `${inviteEmailTrimmed} has been added to this project.`,
       });
       
       setInviteEmail('');
