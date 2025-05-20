@@ -49,7 +49,7 @@ const unitOptions = [
   { value: "pack", label: "Pack" },
   { value: "box", label: "Box" },
   { value: "bag", label: "Bag" },
-  { value: "contractor", label: "Contractor" }, // Fixed: Added missing colon here
+  { value: "contractor", label: "Contractor" },
   { value: "gallon", label: "Gallon" },
 ];
 
@@ -134,6 +134,9 @@ const Materials: React.FC = () => {
     return null;
   }
   
+  // Check if there are existing materials
+  const hasMaterials = project.materials.length > 0;
+  
   return (
     <DashboardLayout>
       <div className="flex justify-between items-center mb-6">
@@ -145,28 +148,31 @@ const Materials: React.FC = () => {
         </div>
         
         <div className="flex space-x-4">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline">
-                <Calculator className="mr-2 h-4 w-4" /> Auto Calculate
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Calculate Materials</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will calculate material quantities based on your room dimensions. 
-                  Any manually entered materials with the same name will be updated.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCalculateMaterials}>
-                  Calculate
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {/* Only show Auto Calculate button when there are no materials */}
+          {!hasMaterials && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline">
+                  <Calculator className="mr-2 h-4 w-4" /> Auto Calculate
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Calculate Materials</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will calculate material quantities based on your room dimensions. 
+                    Any manually entered materials with the same name will be updated.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleCalculateMaterials}>
+                    Calculate
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           
           <Button 
             onClick={() => handleOpenDialog()} 
@@ -177,7 +183,7 @@ const Materials: React.FC = () => {
         </div>
       </div>
       
-      {project.materials.length > 0 ? (
+      {hasMaterials ? (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle>Materials List</CardTitle>
@@ -242,6 +248,7 @@ const Materials: React.FC = () => {
             Add materials manually or use the Auto Calculate feature to generate materials based on your room dimensions.
           </p>
           <div className="flex justify-center space-x-4">
+            {/* Only display Auto Calculate button when there are no materials */}
             <Button 
               variant="outline" 
               onClick={handleCalculateMaterials}
