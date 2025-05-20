@@ -53,6 +53,74 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_users: {
+        Row: {
+          created_at: string
+          id: string
+          is_pending: boolean
+          project_id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_pending?: boolean
+          project_id: string
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_pending?: boolean
+          project_id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_users_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           budget: number
@@ -60,6 +128,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          owner: string | null
           start_date: string | null
           updated_at: string
         }
@@ -69,6 +138,7 @@ export type Database = {
           id: string
           name: string
           notes?: string | null
+          owner?: string | null
           start_date?: string | null
           updated_at?: string
         }
@@ -78,6 +148,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          owner?: string | null
           start_date?: string | null
           updated_at?: string
         }
@@ -188,7 +259,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      find_user_id_by_email: {
+        Args: { lookup_email: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
