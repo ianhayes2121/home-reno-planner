@@ -10,6 +10,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, Trash2, UserPlus } from 'lucide-react';
 
+// Get the Supabase URL from environment or our configuration file
+// Using the URL directly rather than the protected property
+const SUPABASE_URL = "https://riefbexhwazkcnlpxmyo.supabase.co";
+
 interface ProjectMember {
   id: string;
   email: string;
@@ -31,7 +35,7 @@ const ProjectInvite = () => {
     const fetchMembers = async () => {
       setIsLoading(true);
       try {
-        // Get project users
+        // Get project_users entries
         const { data: projectUsers, error } = await supabase
           .from('project_users')
           .select('user_id, role')
@@ -50,25 +54,32 @@ const ProjectInvite = () => {
         for (const pu of projectUsers) {
           try {
             // Use the session token to call the edge function to get user email
-            const response = await fetch(`${supabase.supabaseUrl}/functions/v1/getUserByEmail`, {
-              method: 'POST',
+            const response = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${pu.user_id}`, {
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`
-              },
-              body: JSON.stringify({ email: pu.user_id }) // This isn't correct, but we'll handle it differently
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJpZWZiZXhod2F6a2NubHB4bXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2OTczNDIsImV4cCI6MjA2MzI3MzM0Mn0.b8jqy4Sz6WzpalFXO-DWIsXIQ_2OSHPYMpBdtjJcwNY"
+              }
             });
             
-            if (!response.ok) continue;
+            if (!response.ok) {
+              console.error('Failed to fetch user:', response.statusText);
+              continue;
+            }
             
-            // For now, we'll just add the user ID and role
+            const userData = await response.json();
+            
             membersData.push({
               id: pu.user_id,
-              email: pu.user_id.substring(0, 8) + '...', // Placeholder
+              email: userData.email || `${pu.user_id.substring(0, 8)}...`,
               role: pu.role
             });
           } catch (e) {
             console.error('Error fetching member details:', e);
+            membersData.push({
+              id: pu.user_id,
+              email: `${pu.user_id.substring(0, 8)}...`, // Fallback
+              role: pu.role
+            });
           }
         }
         
@@ -95,8 +106,8 @@ const ProjectInvite = () => {
     
     setIsInviting(true);
     try {
-      // Call the edge function to get user ID by email
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/getUserByEmail`, {
+      // Call the getUserByEmail edge function to get the user ID
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/getUserByEmail`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -105,16 +116,16 @@ const ProjectInvite = () => {
         body: JSON.stringify({ email: inviteEmail })
       });
       
-      const data = await response.json();
+      const result = await response.json();
       
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error(`User with email ${inviteEmail} not found. They need to sign up first.`);
+          throw new Error('User not found. Please ask them to sign up first.');
         }
-        throw new Error(data.error || 'Failed to find user');
+        throw new Error(result.error || 'Failed to find user');
       }
       
-      const userId = data.id;
+      const userId = result.id;
       
       // Check if user is already a member
       const isAlreadyMember = members.some(member => member.id === userId);
@@ -123,7 +134,7 @@ const ProjectInvite = () => {
       }
       
       // Add user to project_users
-      const { error } = await supabase
+      const { error: inviteError } = await supabase
         .from('project_users')
         .insert({
           project_id: project.id,
@@ -131,7 +142,7 @@ const ProjectInvite = () => {
           role: 'member'
         });
       
-      if (error) throw error;
+      if (inviteError) throw inviteError;
       
       // Update members list
       setMembers([...members, { 
@@ -158,7 +169,7 @@ const ProjectInvite = () => {
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleRemoveMember = async (memberId: string, memberEmail: string) => {
     if (!project || !user || !session) return;
     
     // Don't allow removing yourself
@@ -186,7 +197,7 @@ const ProjectInvite = () => {
       
       toast({
         title: 'Member removed',
-        description: 'User has been removed from the project.',
+        description: `${memberEmail} has been removed from the project.`,
       });
     } catch (error: any) {
       console.error('Error removing member:', error);
@@ -256,7 +267,7 @@ const ProjectInvite = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => handleRemoveMember(member.id, member.email)}
                       className="h-8 w-8 p-0"
                     >
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
