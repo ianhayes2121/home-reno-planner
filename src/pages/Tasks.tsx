@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -30,7 +30,8 @@ import {
   Calendar,
   CheckSquare,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Link
 } from "lucide-react";
 import {
   Select,
@@ -39,13 +40,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 const TaskItem: React.FC<{
   task: Task;
+  allTasks: Task[];
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
   onStatusChange: (id: string, status: "not-started" | "in-progress" | "completed") => void;
-}> = ({ task, onEdit, onDelete, onStatusChange }) => {
+}> = ({ task, allTasks, onEdit, onDelete, onStatusChange }) => {
+  const { toast } = useToast();
+  
   const statusColors = {
     "not-started": "bg-gray-100 text-gray-800",
     "in-progress": "bg-blue-100 text-blue-800",
@@ -62,6 +75,29 @@ const TaskItem: React.FC<{
     "not-started": <AlertCircle className="h-4 w-4 mr-2" />,
     "in-progress": <Clock className="h-4 w-4 mr-2" />,
     "completed": <CheckSquare className="h-4 w-4 mr-2" />,
+  };
+  
+  // Find dependent tasks based on the dependsOn array
+  const dependencies = task.dependsOn?.map(depId => 
+    allTasks.find(t => t.id === depId)
+  ).filter(Boolean) || [];
+  
+  // Check if all dependencies are completed
+  const allDependenciesCompleted = dependencies.every(dep => dep?.status === "completed");
+  
+  // Handle status change with validation for dependencies
+  const handleStatusChange = (newStatus: "not-started" | "in-progress" | "completed") => {
+    // If trying to set to in-progress but dependencies aren't completed
+    if (newStatus === "in-progress" && !allDependenciesCompleted && dependencies.length > 0) {
+      toast({
+        title: "Dependencies not completed",
+        description: "All dependent tasks must be completed before starting this task.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    onStatusChange(task.id, newStatus);
   };
 
   return (
@@ -87,11 +123,38 @@ const TaskItem: React.FC<{
       <CardContent>
         <p className="text-gray-600 mb-4">{task.description}</p>
         
+        {/* Display dependencies */}
+        {dependencies.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center mb-2">
+              <Link className="h-4 w-4 mr-1 text-gray-500" />
+              <span className="text-sm font-medium">Dependencies:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {dependencies.map(dep => (
+                dep && (
+                  <Badge 
+                    key={dep.id} 
+                    variant="outline" 
+                    className={dep.status === "completed" ? "border-green-500 text-green-700" : "border-amber-500 text-amber-700"}
+                  >
+                    {dep.title} 
+                    {dep.status === "completed" ? 
+                      <CheckSquare className="ml-1 h-3 w-3 text-green-500" /> : 
+                      <Clock className="ml-1 h-3 w-3 text-amber-500" />
+                    }
+                  </Badge>
+                )
+              ))}
+            </div>
+          </div>
+        )}
+        
         <div className="flex justify-between items-center">
           <Select 
             value={task.status} 
             onValueChange={(value: "not-started" | "in-progress" | "completed") => 
-              onStatusChange(task.id, value)
+              handleStatusChange(value)
             }
           >
             <SelectTrigger className="w-[180px]">
@@ -151,6 +214,55 @@ const Tasks: React.FC = () => {
     setEditingTask(null);
   };
   
+  // Calculate end date based on start date and duration
+  const calculateEndDate = useCallback((start: string, durationDays: number) => {
+    if (!start) return "";
+    const startDateObj = new Date(start);
+    const endDateObj = new Date(startDateObj);
+    endDateObj.setDate(startDateObj.getDate() + durationDays);
+    return endDateObj.toISOString().split('T')[0];
+  }, []);
+  
+  // Handle start date change with validation for dependencies
+  const handleStartDateChange = (newStartDate: string) => {
+    setStartDate(newStartDate);
+    
+    // Find all dependent tasks and their end dates
+    if (dependsOn.length > 0 && project) {
+      const dependentTasks = project.tasks.filter(t => dependsOn.includes(t.id));
+      const latestEndDate = dependentTasks.reduce((latest, task) => {
+        if (!task.endDate) return latest;
+        return new Date(task.endDate) > new Date(latest) ? task.endDate : latest;
+      }, "1970-01-01");
+      
+      // If selected start date is before the latest dependency end date, show warning
+      if (latestEndDate && new Date(newStartDate) < new Date(latestEndDate)) {
+        toast({
+          title: "Warning",
+          description: "This start date is before one or more dependencies finish.",
+          variant: "warning",
+        });
+      }
+    }
+    
+    // Update end date based on new start date and duration
+    if (newStartDate) {
+      const newEndDate = calculateEndDate(newStartDate, duration);
+      setEndDate(newEndDate);
+    } else {
+      setEndDate("");
+    }
+  };
+  
+  // Handle duration change and update end date
+  const handleDurationChange = (newDuration: number) => {
+    setDuration(newDuration);
+    if (startDate) {
+      const newEndDate = calculateEndDate(startDate, newDuration);
+      setEndDate(newEndDate);
+    }
+  };
+  
   const handleOpenDialog = (task?: Task) => {
     if (task) {
       // Editing existing task
@@ -185,6 +297,34 @@ const Tasks: React.FC = () => {
       return;
     }
     
+    // Validate dependencies
+    if (dependsOn.length > 0 && startDate && project) {
+      const dependentTasks = project.tasks.filter(t => dependsOn.includes(t.id));
+      
+      // Check if any dependency doesn't have an end date
+      const missingEndDates = dependentTasks.filter(t => !t.endDate);
+      if (missingEndDates.length > 0) {
+        toast({
+          title: "Missing Information",
+          description: "Some dependent tasks don't have end dates set.",
+          variant: "warning",
+        });
+      }
+      
+      // Check if start date is before any dependency's end date
+      const invalidDates = dependentTasks.filter(t => 
+        t.endDate && new Date(startDate) < new Date(t.endDate)
+      );
+      
+      if (invalidDates.length > 0) {
+        toast({
+          title: "Date Conflict",
+          description: "Start date is before one or more dependencies finish.",
+          variant: "warning",
+        });
+      }
+    }
+    
     const taskData = {
       title,
       description,
@@ -216,9 +356,32 @@ const Tasks: React.FC = () => {
     }
   };
   
-  const notStartedTasks = project?.tasks.filter(t => t.status === "not-started") || [];
-  const inProgressTasks = project?.tasks.filter(t => t.status === "in-progress") || [];
-  const completedTasks = project?.tasks.filter(t => t.status === "completed") || [];
+  // Sort tasks by start date (null dates at the bottom)
+  const sortedTasks = useMemo(() => {
+    if (!project) return { notStarted: [], inProgress: [], completed: [] };
+    
+    // Helper function to sort by start date
+    const sortByStartDate = (tasks: Task[]) => {
+      return [...tasks].sort((a, b) => {
+        // If both have start dates, compare them
+        if (a.startDate && b.startDate) {
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        }
+        // If only a has a start date, it should come first
+        if (a.startDate) return -1;
+        // If only b has a start date, it should come first
+        if (b.startDate) return 1;
+        // If neither has a start date, maintain original order
+        return 0;
+      });
+    };
+    
+    return {
+      notStarted: sortByStartDate(project.tasks.filter(t => t.status === "not-started")),
+      inProgress: sortByStartDate(project.tasks.filter(t => t.status === "in-progress")),
+      completed: sortByStartDate(project.tasks.filter(t => t.status === "completed"))
+    };
+  }, [project]);
   
   if (!project) {
     return null;
@@ -246,19 +409,20 @@ const Tasks: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <h2 className="text-lg font-medium mb-4 flex items-center">
-              <AlertCircle className="mr-2 h-5 w-5 text-gray-500" /> Not Started ({notStartedTasks.length})
+              <AlertCircle className="mr-2 h-5 w-5 text-gray-500" /> Not Started ({sortedTasks.notStarted.length})
             </h2>
             <div className="space-y-4">
-              {notStartedTasks.map(task => (
+              {sortedTasks.notStarted.map(task => (
                 <TaskItem
                   key={task.id}
                   task={task}
+                  allTasks={project.tasks}
                   onEdit={handleOpenDialog}
                   onDelete={handleDeleteTask}
                   onStatusChange={handleStatusChange}
                 />
               ))}
-              {notStartedTasks.length === 0 && (
+              {sortedTasks.notStarted.length === 0 && (
                 <Card className="bg-gray-50 border-dashed">
                   <CardContent className="text-center py-6 text-gray-500">
                     No tasks in this column
@@ -270,19 +434,20 @@ const Tasks: React.FC = () => {
           
           <div>
             <h2 className="text-lg font-medium mb-4 flex items-center">
-              <Clock className="mr-2 h-5 w-5 text-blue-500" /> In Progress ({inProgressTasks.length})
+              <Clock className="mr-2 h-5 w-5 text-blue-500" /> In Progress ({sortedTasks.inProgress.length})
             </h2>
             <div className="space-y-4">
-              {inProgressTasks.map(task => (
+              {sortedTasks.inProgress.map(task => (
                 <TaskItem
                   key={task.id}
                   task={task}
+                  allTasks={project.tasks}
                   onEdit={handleOpenDialog}
                   onDelete={handleDeleteTask}
                   onStatusChange={handleStatusChange}
                 />
               ))}
-              {inProgressTasks.length === 0 && (
+              {sortedTasks.inProgress.length === 0 && (
                 <Card className="bg-gray-50 border-dashed">
                   <CardContent className="text-center py-6 text-gray-500">
                     No tasks in this column
@@ -294,19 +459,20 @@ const Tasks: React.FC = () => {
           
           <div>
             <h2 className="text-lg font-medium mb-4 flex items-center">
-              <CheckSquare className="mr-2 h-5 w-5 text-green-500" /> Completed ({completedTasks.length})
+              <CheckSquare className="mr-2 h-5 w-5 text-green-500" /> Completed ({sortedTasks.completed.length})
             </h2>
             <div className="space-y-4">
-              {completedTasks.map(task => (
+              {sortedTasks.completed.map(task => (
                 <TaskItem
                   key={task.id}
                   task={task}
+                  allTasks={project.tasks}
                   onEdit={handleOpenDialog}
                   onDelete={handleDeleteTask}
                   onStatusChange={handleStatusChange}
                 />
               ))}
-              {completedTasks.length === 0 && (
+              {sortedTasks.completed.length === 0 && (
                 <Card className="bg-gray-50 border-dashed">
                   <CardContent className="text-center py-6 text-gray-500">
                     No tasks in this column
@@ -368,6 +534,80 @@ const Tasks: React.FC = () => {
               />
             </div>
             
+            {/* Dependencies field */}
+            <div className="space-y-2">
+              <Label htmlFor="dependencies">Dependencies</Label>
+              <Select>
+                <SelectTrigger>
+                  <SelectValue placeholder={`${dependsOn.length} task${dependsOn.length !== 1 ? 's' : ''} selected`} />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="max-h-[200px] overflow-auto">
+                    {project.tasks
+                      .filter(t => t.id !== (editingTask?.id || 'new')) // Filter out self
+                      .map(task => (
+                        <div key={task.id} className="flex items-center px-2 py-1 hover:bg-gray-100 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id={`task-${task.id}`}
+                            checked={dependsOn.includes(task.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setDependsOn([...dependsOn, task.id]);
+                              } else {
+                                setDependsOn(dependsOn.filter(id => id !== task.id));
+                              }
+                            }}
+                            className="mr-2"
+                          />
+                          <label 
+                            htmlFor={`task-${task.id}`}
+                            className="flex-grow cursor-pointer"
+                          >
+                            {task.title}
+                            <span className={`ml-2 text-xs ${
+                              task.status === 'completed' ? 'text-green-500' : 
+                              task.status === 'in-progress' ? 'text-blue-500' : 
+                              'text-gray-500'
+                            }`}>
+                              ({statusLabels[task.status]})
+                            </span>
+                          </label>
+                        </div>
+                      ))
+                    }
+                    {project.tasks.length === (editingTask ? 1 : 0) && (
+                      <div className="px-2 py-2 text-gray-500 text-sm">
+                        No other tasks available
+                      </div>
+                    )}
+                  </div>
+                </SelectContent>
+              </Select>
+              {dependsOn.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {dependsOn.map(depId => {
+                    const task = project.tasks.find(t => t.id === depId);
+                    return task && (
+                      <Badge 
+                        key={depId} 
+                        variant="outline"
+                        className={task.status === "completed" ? "border-green-500 text-green-700" : "border-amber-500 text-amber-700"}
+                      >
+                        {task.title}
+                        <button 
+                          onClick={() => setDependsOn(dependsOn.filter(id => id !== depId))}
+                          className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
+                        >
+                          ✕
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
               <Select value={status} onValueChange={(value: "not-started" | "in-progress" | "completed") => setStatus(value)}>
@@ -389,7 +629,7 @@ const Tasks: React.FC = () => {
                   id="start-date"
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -399,9 +639,21 @@ const Tasks: React.FC = () => {
                   type="number"
                   min="1"
                   value={duration}
-                  onChange={(e) => setDuration(parseInt(e.target.value) || 1)}
+                  onChange={(e) => handleDurationChange(parseInt(e.target.value) || 1)}
                 />
               </div>
+            </div>
+            
+            {/* Calculated End Date (read-only) */}
+            <div className="space-y-2">
+              <Label htmlFor="end-date">End Date (Calculated)</Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                readOnly
+                className="bg-gray-50"
+              />
             </div>
           </div>
           <DialogFooter>
