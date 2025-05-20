@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   Clipboard,
@@ -9,9 +9,22 @@ import {
   Square, 
   ListTodo,
   Calendar,
-  Settings
+  Settings,
+  LogOut,
+  User
 } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -19,12 +32,14 @@ interface DashboardLayoutProps {
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { project, getCompletionPercentage } = useProject();
+  const { user, profile, signOut } = useAuth();
   
   const completionPercentage = getCompletionPercentage();
 
   const navigation = [
-    { name: "Dashboard", href: "/", icon: Home },
+    { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "Rooms", href: "/rooms", icon: Square },
     { name: "Materials", href: "/materials", icon: Clipboard },
     { name: "Tasks", href: "/tasks", icon: ListTodo },
@@ -33,6 +48,28 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   ];
   
   const isActive = (path: string) => location.pathname === path;
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const getInitials = () => {
+    if (!profile) return 'U';
+    
+    const firstName = profile.first_name || '';
+    const lastName = profile.last_name || '';
+    
+    if (!firstName && !lastName) {
+      return user?.email?.substring(0, 1).toUpperCase() || 'U';
+    }
+    
+    return `${firstName.substring(0, 1)}${lastName.substring(0, 1)}`.toUpperCase();
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -91,6 +128,40 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             </div>
           </div>
         )}
+        
+        {/* User profile section */}
+        <div className="p-4 border-t border-gray-200">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="w-full flex items-center justify-between p-2">
+                <div className="flex items-center">
+                  <Avatar className="h-8 w-8 mr-2">
+                    <AvatarFallback>{getInitials()}</AvatarFallback>
+                  </Avatar>
+                  <div className="text-sm text-left">
+                    <p className="font-medium truncate max-w-[120px]">
+                      {profile?.first_name ? `${profile.first_name} ${profile.last_name || ''}` : user?.email}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate max-w-[120px]">{user?.email}</p>
+                  </div>
+                </div>
+                <User className="h-4 w-4 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       
       {/* Main content */}

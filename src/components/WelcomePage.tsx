@@ -13,21 +13,38 @@ import {
 import { Label } from "@/components/ui/label";
 import { useProject } from "@/contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, Square, ListTodo } from "lucide-react";
+import { ClipboardCheck, Square, ListTodo, LogIn } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
   const { createProject } = useProject();
+  const { user, loading } = useAuth();
   
   const [projectName, setProjectName] = useState("My Basement Renovation");
   const [budget, setBudget] = useState(10000);
   
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (projectName.trim() === "") return;
     
-    createProject(projectName, budget);
-    navigate("/rooms");
+    try {
+      await createProject(projectName, budget);
+      navigate("/rooms");
+    } catch (error) {
+      console.error("Error creating project:", error);
+    }
   };
+  
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+        <Loader2 className="h-12 w-12 animate-spin text-basement-blue-600" />
+        <p className="mt-4 text-gray-600">Loading...</p>
+      </div>
+    );
+  }
   
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
@@ -39,6 +56,17 @@ const WelcomePage: React.FC = () => {
           <p className="text-xl text-gray-600">
             Design, price, and manage your basement renovation project
           </p>
+          
+          {!user && (
+            <div className="mt-4">
+              <Link to="/auth">
+                <Button variant="outline" className="flex items-center">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Login or Register
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -94,42 +122,63 @@ const WelcomePage: React.FC = () => {
           </Card>
         </div>
         
-        <Card className="w-full mb-8">
-          <CardHeader>
-            <CardTitle>Create Your Project</CardTitle>
-            <CardDescription>
-              Start by setting up your basement renovation project
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="project-name">Project Name</Label>
-              <Input
-                id="project-name"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="My Basement Renovation"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="budget">Budget ($)</Label>
-              <Input
-                id="budget"
-                type="number"
-                value={budget}
-                onChange={(e) => setBudget(Number(e.target.value))}
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button 
-              onClick={handleCreateProject} 
-              className="bg-basement-blue-600 hover:bg-basement-blue-700"
-            >
-              Create Project
-            </Button>
-          </CardFooter>
-        </Card>
+        {user && (
+          <Card className="w-full mb-8">
+            <CardHeader>
+              <CardTitle>Create Your Project</CardTitle>
+              <CardDescription>
+                Start by setting up your basement renovation project
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="project-name">Project Name</Label>
+                <Input
+                  id="project-name"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="My Basement Renovation"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="budget">Budget ($)</Label>
+                <Input
+                  id="budget"
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(Number(e.target.value))}
+                />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={handleCreateProject} 
+                className="bg-basement-blue-600 hover:bg-basement-blue-700"
+              >
+                Create Project
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+        
+        {!user && (
+          <Card className="w-full mb-8">
+            <CardHeader>
+              <CardTitle>Get Started</CardTitle>
+              <CardDescription>
+                Sign in or register to create your first project
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center py-6">
+              <Link to="/auth">
+                <Button size="lg" className="bg-basement-blue-600 hover:bg-basement-blue-700">
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Login or Register
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
