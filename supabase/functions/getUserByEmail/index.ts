@@ -64,12 +64,12 @@ serve(async (req) => {
     const normalizedEmail = email.trim().toLowerCase();
     console.log(`Looking up user with email: ${normalizedEmail}`);
 
-    // Query the auth schema directly using the auth.users table (not public.auth.users)
-    const { data: users, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('id, email')
-      .ilike('email', normalizedEmail)
-      .is('deleted_at', null);
+    // Use auth.getUser() to find a user by email
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers({
+      filter: {
+        email: normalizedEmail,
+      },
+    });
 
     if (userError) {
       console.error('Error querying users:', userError);
@@ -79,7 +79,7 @@ serve(async (req) => {
       );
     }
 
-    if (!users || users.length === 0) {
+    if (!userData || userData.users.length === 0) {
       console.log('No user found with email:', normalizedEmail);
       return new Response(
         JSON.stringify({ error: 'User not found' }),
@@ -87,7 +87,17 @@ serve(async (req) => {
       );
     }
 
-    const foundUser = users[0];
+    // Find the first non-deleted user
+    const foundUser = userData.users.find(user => !user.banned_until && !user.deleted_at);
+    
+    if (!foundUser) {
+      console.log('No active user found with email:', normalizedEmail);
+      return new Response(
+        JSON.stringify({ error: 'User not found or inactive' }),
+        { status: 404, headers: corsHeaders }
+      );
+    }
+    
     console.log(`Found user with id: ${foundUser.id}`);
 
     // Return the user ID (without exposing other sensitive auth info)
