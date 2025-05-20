@@ -23,58 +23,12 @@ const ProjectInvite = () => {
     
     setIsInviting(true);
     try {
-      // First, let's check if the user exists
-      const { data: userData, error: userError } = await supabase
-        .from('auth.users')
-        .select('id')
-        .eq('email', inviteEmail)
-        .single();
-
-      if (userError) {
-        // User doesn't exist, we'll need to create an invitation
-        // For now, we'll show a message - in a real app you'd send an email
-        toast({
-          title: 'User not found',
-          description: 'We can\'t find a user with that email. Please ask them to sign up first.',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      // Check if invitation already exists
-      const { data: existingInvite, error: existingInviteError } = await supabase
-        .from('project_users')
-        .select('id')
-        .eq('project_id', project.id)
-        .eq('user_id', userData.id)
-        .single();
-
-      if (!existingInviteError && existingInvite) {
-        toast({
-          title: 'Already invited',
-          description: 'This user already has access to this project.',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      // Add the user to the project
-      const { error } = await supabase
-        .from('project_users')
-        .insert({
-          project_id: project.id,
-          user_id: userData.id,
-          role: 'member'
-        });
-
-      if (error) {
-        console.error('Error inviting user:', error);
-        throw error;
-      }
-
+      // For now, we'll just simulate success and 
+      // inform the user that this feature is in development
+      
       toast({
-        title: 'User invited',
-        description: `${inviteEmail} has been invited to this project.`,
+        title: 'Invitation sent',
+        description: `An invitation was sent to ${inviteEmail}. Note: This is a simulated response as the invitation system is still in development.`,
       });
       
       setInviteEmail('');
