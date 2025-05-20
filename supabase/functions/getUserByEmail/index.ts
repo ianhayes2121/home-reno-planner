@@ -64,7 +64,7 @@ serve(async (req) => {
 
     // Query the auth.users table to find the user by email (case insensitive)
     const { data: users, error: userError } = await supabaseAdmin
-      .from('auth.users')
+      .from('users')
       .select('id, email')
       .ilike('email', normalizedEmail);
 
