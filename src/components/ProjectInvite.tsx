@@ -8,8 +8,9 @@ import { toast } from '@/components/ui/use-toast';
 import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2, Trash2, UserPlus } from 'lucide-react';
+import { Loader2, Trash2, UserPlus, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProjectMember {
   id: string;
@@ -24,6 +25,7 @@ const ProjectInvite = () => {
   const [isInviting, setIsInviting] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch existing project members when project changes
   useEffect(() => {
@@ -31,6 +33,7 @@ const ProjectInvite = () => {
     
     const fetchMembers = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         // Get project_users entries
         const { data: projectUsers, error } = await supabase
@@ -85,8 +88,9 @@ const ProjectInvite = () => {
         
         const membersData = await Promise.all(memberPromises);
         setMembers(membersData);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching project members:', error);
+        setError('Failed to load team members');
         toast({
           title: 'Error',
           description: 'Failed to load team members',
@@ -103,9 +107,19 @@ const ProjectInvite = () => {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!project || !user || !inviteEmail.trim() || !session) return;
+    if (!project || !user || !inviteEmail.trim() || !session) {
+      if (!session) {
+        toast({
+          title: 'Authentication required',
+          description: 'You must be logged in to invite users.',
+          variant: 'destructive'
+        });
+      }
+      return;
+    }
     
     setIsInviting(true);
+    setError(null);
     try {
       // First, check if the user exists with this email
       const inviteEmailTrimmed = inviteEmail.trim();
@@ -127,6 +141,8 @@ const ProjectInvite = () => {
         
         if (response.status === 404) {
           throw new Error(`No user found with email ${inviteEmailTrimmed}. Please ask them to sign up first.`);
+        } else if (response.status === 401) {
+          throw new Error('Authentication error. Please log out and back in.');
         } else {
           throw new Error(errorData.error || 'Failed to find user');
         }
@@ -158,21 +174,40 @@ const ProjectInvite = () => {
       
       if (inviteError) throw inviteError;
       
+      // Fetch the user's profile to get their name
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('first_name, last_name')
+        .eq('id', userId)
+        .single();
+        
+      let displayName = inviteEmailTrimmed;
+      if (profileData) {
+        const firstName = profileData.first_name || '';
+        const lastName = profileData.last_name || '';
+        const fullName = [firstName, lastName].filter(Boolean).join(' ');
+        
+        if (fullName) {
+          displayName = fullName;
+        }
+      }
+      
       // Update members list
       setMembers([...members, { 
         id: userId, 
-        email: inviteEmailTrimmed, 
+        email: displayName, 
         role: 'member' 
       }]);
       
       toast({
         title: 'User invited',
-        description: `${inviteEmailTrimmed} has been added to this project.`,
+        description: `${displayName} has been added to this project.`,
       });
       
       setInviteEmail('');
     } catch (error: any) {
       console.error('Invitation error:', error);
+      setError(error.message || 'Failed to invite user');
       toast({
         title: 'Invitation failed',
         description: error.message || 'Failed to invite user',
@@ -248,6 +283,7 @@ const ProjectInvite = () => {
                 onChange={(e) => setInviteEmail(e.target.value)}
                 required
                 className="flex-1"
+                disabled={isInviting}
               />
               <Button 
                 type="submit" 
@@ -260,14 +296,22 @@ const ProjectInvite = () => {
                 Invite
               </Button>
             </div>
+            {error && (
+              <div className="mt-2 flex items-center text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                <span>{error}</span>
+              </div>
+            )}
           </div>
         </form>
         
         <div className="mt-6">
           <h3 className="text-sm font-medium mb-3">Project Members</h3>
           {isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full rounded-md" />
+              <Skeleton className="h-12 w-full rounded-md" />
+              <Skeleton className="h-12 w-full rounded-md" />
             </div>
           ) : members.length > 0 ? (
             <ul className="space-y-2">
@@ -295,7 +339,9 @@ const ProjectInvite = () => {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">No other members yet. Invite someone to collaborate!</p>
+            <div className="text-center py-6 bg-muted/30 rounded-md">
+              <p className="text-sm text-muted-foreground">No other members yet. Invite someone to collaborate!</p>
+            </div>
           )}
         </div>
       </CardContent>
