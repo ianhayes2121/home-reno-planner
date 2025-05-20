@@ -51,7 +51,9 @@ serve(async (req) => {
     }
 
     // Parse the request to get the email
-    const { email } = await req.json();
+    const requestData = await req.json().catch(() => ({ email: null }));
+    const { email } = requestData;
+    
     if (!email) {
       return new Response(
         JSON.stringify({ error: 'Email is required' }),
@@ -63,15 +65,16 @@ serve(async (req) => {
     console.log(`Looking up user with email: ${normalizedEmail}`);
 
     // Query the auth.users table to find the user by email (case insensitive)
+    // Important: When using service role, we can query auth.users directly
     const { data: users, error: userError } = await supabaseAdmin
-      .from('users')
+      .from('auth.users')
       .select('id, email')
       .ilike('email', normalizedEmail);
 
     if (userError) {
       console.error('Error querying users:', userError);
       return new Response(
-        JSON.stringify({ error: 'Database query failed' }),
+        JSON.stringify({ error: 'Database query failed', details: userError.message }),
         { status: 500, headers: corsHeaders }
       );
     }
@@ -96,7 +99,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in getUserByEmail function:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
+      JSON.stringify({ error: error.message || 'Internal server error', stack: error.stack }),
       { status: 500, headers: corsHeaders }
     );
   }

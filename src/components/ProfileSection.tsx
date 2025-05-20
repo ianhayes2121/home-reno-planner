@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,15 @@ const ProfileSection = () => {
   const [firstName, setFirstName] = useState(profile?.first_name || '');
   const [lastName, setLastName] = useState(profile?.last_name || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Update local state when profile changes
+  useEffect(() => {
+    if (profile) {
+      setFirstName(profile.first_name || '');
+      setLastName(profile.last_name || '');
+    }
+  }, [profile]);
 
   const handleUpdateProfile = async () => {
     if (!user) return;
@@ -46,6 +55,17 @@ const ProfileSection = () => {
       setIsUpdating(false);
     }
   };
+
+  if (!user) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+          <CardDescription>Please sign in to manage your account</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card>

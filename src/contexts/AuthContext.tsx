@@ -46,10 +46,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .single();
 
       if (error) {
-        // If profile not found, create it
+        // Only try to create a profile if it doesn't exist
         if (error.code === 'PGRST116') {
           console.log('Profile not found, creating one...');
           
+          // Insert a new profile with the user ID
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
             .insert({
@@ -63,6 +64,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
           if (createError) {
             console.error('Error creating profile:', createError);
+            toast({
+              title: 'Profile Error',
+              description: 'Failed to create your profile. You may need to log out and back in.',
+              variant: 'destructive',
+            });
             return;
           }
           
@@ -71,16 +77,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
         
+        // Handle other errors
         console.error('Error fetching profile:', error);
+        toast({
+          title: 'Profile Error',
+          description: 'Could not retrieve your profile information',
+          variant: 'destructive',
+        });
         return;
       }
 
+      // If profile exists, set it
       if (data) {
         console.log('Profile loaded successfully');
         setProfile(data as Profile);
       }
     } catch (error) {
       console.error('Error in fetchProfile:', error);
+      toast({
+        title: 'Profile Error',
+        description: 'An unexpected error occurred while loading your profile',
+        variant: 'destructive',
+      });
     }
   };
 
