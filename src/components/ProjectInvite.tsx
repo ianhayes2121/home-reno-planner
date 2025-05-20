@@ -9,10 +9,7 @@ import { useProject } from '@/contexts/ProjectContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2, Trash2, UserPlus } from 'lucide-react';
-
-// Get the Supabase URL from environment or our configuration file
-// Using the URL directly rather than the protected property
-const SUPABASE_URL = "https://riefbexhwazkcnlpxmyo.supabase.co";
+import { Badge } from '@/components/ui/badge';
 
 interface ProjectMember {
   id: string;
@@ -28,9 +25,9 @@ const ProjectInvite = () => {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch existing project members when project or session changes
+  // Fetch existing project members when project changes
   useEffect(() => {
-    if (!project || !session) return;
+    if (!project || !user) return;
     
     const fetchMembers = async () => {
       setIsLoading(true);
@@ -48,41 +45,45 @@ const ProjectInvite = () => {
           return;
         }
         
-        // For each user ID, fetch the email using profiles or another method
-        const membersData: ProjectMember[] = [];
-        
-        for (const pu of projectUsers) {
-          try {
-            // Use the session token to call the edge function to get user email
-            const response = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${pu.user_id}`, {
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'apikey': "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJpZWZiZXhod2F6a2NubHB4bXlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2OTczNDIsImV4cCI6MjA2MzI3MzM0Mn0.b8jqy4Sz6WzpalFXO-DWIsXIQ_2OSHPYMpBdtjJcwNY"
-              }
-            });
+        // For each project_user, get the associated profile data
+        const memberPromises = projectUsers.map(async (pu) => {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', pu.user_id)
+            .single();
             
-            if (!response.ok) {
-              console.error('Failed to fetch user:', response.statusText);
-              continue;
-            }
-            
-            const userData = await response.json();
-            
-            membersData.push({
-              id: pu.user_id,
-              email: userData.email || `${pu.user_id.substring(0, 8)}...`,
-              role: pu.role
-            });
-          } catch (e) {
-            console.error('Error fetching member details:', e);
-            membersData.push({
-              id: pu.user_id,
-              email: `${pu.user_id.substring(0, 8)}...`, // Fallback
-              role: pu.role
-            });
+          if (profileError && profileError.code !== 'PGSQL_ERROR') {
+            console.error('Error fetching profile:', profileError);
           }
-        }
+          
+          // Get email from profiles or use fallback user ID
+          let email = `${pu.user_id.substring(0, 8)}...`;
+          
+          if (profileData) {
+            // If the profile exists, use first_name and last_name to create a display name
+            const firstName = profileData.first_name || '';
+            const lastName = profileData.last_name || '';
+            const displayName = [firstName, lastName].filter(Boolean).join(' ');
+            
+            if (displayName) {
+              email = displayName;
+            }
+          }
+          
+          // If this is the current user, add "(You)" to the email
+          if (pu.user_id === user.id) {
+            email += " (You)";
+          }
+          
+          return {
+            id: pu.user_id,
+            email,
+            role: pu.role
+          };
+        });
         
+        const membersData = await Promise.all(memberPromises);
         setMembers(membersData);
       } catch (error) {
         console.error('Error fetching project members:', error);
@@ -97,7 +98,7 @@ const ProjectInvite = () => {
     };
     
     fetchMembers();
-  }, [project, session]);
+  }, [project, user]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,26 +107,19 @@ const ProjectInvite = () => {
     
     setIsInviting(true);
     try {
-      // Call the getUserByEmail edge function to get the user ID
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/getUserByEmail`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ email: inviteEmail })
-      });
+      // First, check if the user exists with this email
+      const { data: userData, error: userError } = await supabase
+        .rpc('find_user_id_by_email', { lookup_email: inviteEmail });
       
-      const result = await response.json();
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('User not found. Please ask them to sign up first.');
-        }
-        throw new Error(result.error || 'Failed to find user');
+      if (userError) {
+        throw new Error(userError.message || 'Failed to find user');
       }
       
-      const userId = result.id;
+      if (!userData) {
+        throw new Error('User not found. Please ask them to sign up first.');
+      }
+      
+      const userId = userData;
       
       // Check if user is already a member
       const isAlreadyMember = members.some(member => member.id === userId);
@@ -261,7 +255,11 @@ const ProjectInvite = () => {
                 <li key={member.id} className="flex items-center justify-between bg-muted/40 p-2 rounded-md">
                   <div>
                     <p className="text-sm font-medium">{member.email}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                    <div className="flex items-center mt-1">
+                      <Badge variant={member.role === 'owner' ? 'default' : 'secondary'} className="text-xs">
+                        {member.role}
+                      </Badge>
+                    </div>
                   </div>
                   {member.id !== user?.id && (
                     <Button 
