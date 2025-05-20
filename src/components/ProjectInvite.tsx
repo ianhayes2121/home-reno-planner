@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ interface ProjectMember {
   email: string;
   role: string;
   isPending?: boolean;
+  firstName?: string;
+  lastName?: string;
 }
 
 const ProjectInvite = () => {
@@ -45,6 +48,7 @@ const ProjectInvite = () => {
         
         if (!projectUsers || projectUsers.length === 0) {
           setMembers([]);
+          setIsLoading(false);
           return;
         }
         
@@ -52,7 +56,7 @@ const ProjectInvite = () => {
         const memberPromises = projectUsers.map(async (pu) => {
           const { data: profileData, error: profileError } = await supabase
             .from('profiles')
-            .select('*')
+            .select('first_name, last_name, email')
             .eq('id', pu.user_id)
             .single();
             
@@ -60,28 +64,31 @@ const ProjectInvite = () => {
             console.log(`Error fetching profile for user ${pu.user_id}:`, profileError);
           }
           
-          // Get email from user auth data or use fallback user ID
-          let email = `${pu.user_id.substring(0, 8)}...`;
+          let displayName = `${pu.user_id.substring(0, 8)}...`;
+          let email = '';
           
           if (profileData) {
-            // If the profile exists, use first_name and last_name to create a display name
             const firstName = profileData.first_name || '';
             const lastName = profileData.last_name || '';
-            const displayName = [firstName, lastName].filter(Boolean).join(' ');
+            email = profileData.email || '';
             
-            if (displayName) {
-              email = displayName;
+            if (firstName || lastName) {
+              displayName = [firstName, lastName].filter(Boolean).join(' ');
+            } else if (email) {
+              displayName = email;
             }
           }
           
-          // If this is the current user, add "(You)" to the email
+          // If this is the current user, add "(You)" to the display name
           if (pu.user_id === user.id) {
-            email += " (You)";
+            displayName += " (You)";
           }
           
           return {
             id: pu.user_id,
-            email,
+            email: email || displayName,
+            firstName: profileData?.first_name || '',
+            lastName: profileData?.last_name || '',
             role: pu.role,
             isPending: pu.is_pending
           };
@@ -125,7 +132,7 @@ const ProjectInvite = () => {
       const inviteEmailTrimmed = inviteEmail.trim();
       console.log(`Attempting to invite user with email: ${inviteEmailTrimmed}`);
       
-      // Make the request to the edge function with project ID for context
+      // Make the request to the edge function with project ID
       const response = await fetch(`https://riefbexhwazkcnlpxmyo.supabase.co/functions/v1/getUserByEmail`, {
         method: 'POST',
         headers: {
@@ -138,51 +145,29 @@ const ProjectInvite = () => {
         })
       });
       
+      const data = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error from getUserByEmail function:', errorData);
-        
-        if (response.status === 401) {
-          throw new Error('Authentication error. Please log out and back in.');
-        } else {
-          throw new Error(errorData.error || 'Failed to process invitation');
-        }
+        console.error('Error from getUserByEmail function:', data);
+        throw new Error(data.error || 'Failed to process invitation');
       }
       
-      const data = await response.json();
-      const userId = data.id;
-      const isNewUser = data.isNewUser;
+      const { id: userId, isNewUser, email, isPending, profile, role } = data;
       
       if (!userId) {
         throw new Error('User ID not returned from lookup');
       }
       
-      console.log(`User found/created with ID: ${userId}, isNewUser: ${isNewUser}`);
+      console.log(`User processed with ID: ${userId}, isNewUser: ${isNewUser}`);
       
-      // Check if user is already a member
-      const isAlreadyMember = members.some(member => member.id === userId);
-      if (isAlreadyMember) {
-        throw new Error('This user is already a member of the project.');
-      }
-      
-      // Add user to project_users
-      const { error: inviteError } = await supabase
-        .from('project_users')
-        .insert({
-          project_id: project.id,
-          user_id: userId,
-          role: 'member',
-          is_pending: isNewUser
-        });
-      
-      if (inviteError) throw inviteError;
-      
-      // Add a new member to the list
-      setMembers([...members, { 
+      // Add the new member to the list
+      setMembers(prev => [...prev, { 
         id: userId, 
-        email: inviteEmailTrimmed,  // We'll display the email until they set up their profile
-        role: 'member',
-        isPending: isNewUser
+        email: email,
+        firstName: profile?.first_name || '',
+        lastName: profile?.last_name || '',
+        role: role,
+        isPending: isPending
       }]);
       
       toast({
@@ -246,6 +231,13 @@ const ProjectInvite = () => {
     }
   };
 
+  const getDisplayName = (member: ProjectMember) => {
+    if (member.firstName || member.lastName) {
+      return [member.firstName, member.lastName].filter(Boolean).join(' ');
+    }
+    return member.email;
+  };
+
   if (!project) {
     return null;
   }
@@ -306,7 +298,7 @@ const ProjectInvite = () => {
               {members.map(member => (
                 <li key={member.id} className="flex items-center justify-between bg-muted/40 p-2 rounded-md">
                   <div>
-                    <p className="text-sm font-medium">{member.email}</p>
+                    <p className="text-sm font-medium">{getDisplayName(member)}</p>
                     <div className="flex items-center mt-1 space-x-2">
                       <Badge variant={member.role === 'owner' ? 'default' : 'secondary'} className="text-xs">
                         {member.role}
@@ -323,7 +315,7 @@ const ProjectInvite = () => {
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => handleRemoveMember(member.id, member.email)}
+                      onClick={() => handleRemoveMember(member.id, getDisplayName(member))}
                       className="h-8 w-8 p-0"
                     >
                       <Trash2 className="h-4 w-4 text-muted-foreground" />

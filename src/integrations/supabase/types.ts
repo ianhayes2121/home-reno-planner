@@ -57,6 +57,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          email: string | null
           first_name: string | null
           id: string
           last_name: string | null
@@ -65,6 +66,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           first_name?: string | null
           id: string
           last_name?: string | null
@@ -73,6 +75,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           first_name?: string | null
           id?: string
           last_name?: string | null
@@ -259,6 +262,10 @@ export type Database = {
       find_user_id_by_email: {
         Args: { lookup_email: string }
         Returns: string
+      }
+      is_project_admin: {
+        Args: { project_id: string }
+        Returns: boolean
       }
     }
     Enums: {
