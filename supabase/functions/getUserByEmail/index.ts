@@ -6,8 +6,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
+// Define CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json'
+};
+
 // This function will fetch a user by email without exposing sensitive auth table data
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
     // Create a Supabase client with the Admin key
     const supabaseAdmin = createClient(
@@ -23,7 +35,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Missing Authorization header' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -34,7 +46,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -43,7 +55,7 @@ serve(async (req) => {
     if (!email) {
       return new Response(
         JSON.stringify({ error: 'Email is required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -57,20 +69,20 @@ serve(async (req) => {
     if (userError) {
       return new Response(
         JSON.stringify({ error: 'User not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        { status: 404, headers: corsHeaders }
       );
     }
 
     // Return the user ID (without exposing other sensitive auth info)
     return new Response(
       JSON.stringify({ id: userData.id }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { status: 200, headers: corsHeaders }
     );
 
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: corsHeaders }
     );
   }
 });
