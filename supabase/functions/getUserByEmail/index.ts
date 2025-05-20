@@ -64,12 +64,12 @@ serve(async (req) => {
     const normalizedEmail = email.trim().toLowerCase();
     console.log(`Looking up user with email: ${normalizedEmail}`);
 
-    // Query the auth.users table to find the user by email (case insensitive)
-    // Important: When using service role, we can query auth.users directly
+    // Query the auth schema directly using the auth.users table (not public.auth.users)
     const { data: users, error: userError } = await supabaseAdmin
-      .from('auth.users')
+      .from('users')
       .select('id, email')
-      .ilike('email', normalizedEmail);
+      .ilike('email', normalizedEmail)
+      .is('deleted_at', null);
 
     if (userError) {
       console.error('Error querying users:', userError);
