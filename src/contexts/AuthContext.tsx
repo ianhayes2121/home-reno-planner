@@ -4,9 +4,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { toast } from '@/components/ui/use-toast';
 
+// Define the profile type
+interface Profile {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
+  profile: Profile | null; // Add profile to the context type
   loading: boolean;
   signUp: (email: string, password: string, metadata?: { first_name?: string; last_name?: string }) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
@@ -19,7 +30,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Function to fetch user profile data
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return;
+      }
+
+      if (data) {
+        setProfile(data as Profile);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -28,6 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log('Auth state changed:', event);
         setSession(sessionData);
         setUser(sessionData?.user ?? null);
+        
+        // Fetch profile when user signs in
+        if (sessionData?.user) {
+          fetchProfile(sessionData.user.id);
+        } else {
+          setProfile(null);
+        }
         
         if (event === 'SIGNED_IN') {
           toast({
@@ -52,6 +93,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabase.auth.getSession().then(({ data: { session: sessionData } }) => {
       setSession(sessionData);
       setUser(sessionData?.user ?? null);
+      
+      // Fetch profile for existing session
+      if (sessionData?.user) {
+        fetchProfile(sessionData.user.id);
+      }
+      
       setLoading(false);
     });
 
@@ -184,6 +231,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const value = {
     session,
     user,
+    profile,
     loading,
     signUp,
     signIn,
