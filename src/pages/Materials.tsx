@@ -49,6 +49,7 @@ const unitOptions = [
   { value: "pack", label: "Pack" },
   { value: "box", label: "Box" },
   { value: "bag", label: "Bag" },
+  { value: "contractor", label "Contractor" },
   { value: "gallon", label: "Gallon" },
 ];
 
