@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,7 +60,7 @@ const ProjectInvite = () => {
             console.log(`Error fetching profile for user ${pu.user_id}:`, profileError);
           }
           
-          // Get email from profiles or use fallback user ID
+          // Get email from user auth data or use fallback user ID
           let email = `${pu.user_id.substring(0, 8)}...`;
           
           if (profileData) {
@@ -72,9 +71,6 @@ const ProjectInvite = () => {
             
             if (displayName) {
               email = displayName;
-            } else if (profileData.email) {
-              // Use email as fallback if available
-              email = profileData.email;
             }
           }
           
